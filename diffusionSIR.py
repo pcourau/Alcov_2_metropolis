@@ -101,7 +101,7 @@ class DiffusionSIR:
     """Build a model
 
     Args:
-        people (List[str], optional): List of individus. Defaults to "ABC".
+        people (List[str], optional): List of individuals. Defaults to "ABC".
         nbstate (int, optional): Number of days in state I. Defaults to 10.
         T (int, optional): Number of days in the model. Defaults to 30.
     """
@@ -270,7 +270,7 @@ class DiffusionSIR:
     dico = self._createEvidenceFromStory([])
     ie.setEvidence(dico)
     ie.makeInference()
-    pevnull = ie.evidenceProbability()
+    pevnull = min(max(ie.evidenceProbability(),1e-16),1-(1e-16))
     lpevnull = math.log(pevnull)
     for story, weight in stories:
       if len(story) > 0:
@@ -279,7 +279,7 @@ class DiffusionSIR:
           dico[nameO] = 1
           ie.chgEvidence(nameO, 1)
         ie.makeInference()
-        x = weight * math.log(ie.evidenceProbability())
+        x = weight * math.log(max(ie.evidenceProbability(),1e-16))
         if verbose:
           print(f"{nbr} : {weight}x{x}")
         LL += x
