@@ -55,7 +55,7 @@ class DiffusionSIR:
   def _getS(individu: str, t: str):
     """naming rule for variable `State` in the model. 
 
-    State \in {S,I1,...,In,R}
+    State \in {S,E1,...,En,I1,...,In,R}
 
     Args:
         var (str): s, QS, O (the variable name)
@@ -70,7 +70,7 @@ class DiffusionSIR:
   def _getQS(individu: str, t: str):
     """naming rule for variable `Qualitative State` in the model
 
-    Qualitative State \in {S,I,R}
+    Qualitative State \in {S,E,I,R}
 
     Args:
         var (str): s, QS, O (the variable name)
@@ -81,6 +81,7 @@ class DiffusionSIR:
         str: the name
     """
     return DiffusionSIR._getVar("QS", individu, t)
+
 
   def _getO(individu: str, t: str):
     """naming rule for variable `observation` in the model
@@ -97,16 +98,18 @@ class DiffusionSIR:
     """
     return DiffusionSIR._getVar("O", individu, t)
 
-  def __init__(self, people="ABC", nbstate=10, T=30):
+  def __init__(self, people="ABC", nb_E_states=10,nb_I_states=10, T=30):
     """Build a model
 
     Args:
-        people (List[str], optional): List of individus. Defaults to "ABC".
-        nbstate (int, optional): Number of days in state I. Defaults to 10.
+        people (List[str], optional): List of individuals. Defaults to "ABC".
+        nb_E_states (int, optional): Number of days in state E. Defaults to 10.
+        nb_I_states (int, optional): Number of days in state I. Defaults to 10.
         T (int, optional): Number of days in the model. Defaults to 30.
     """
     self._people = people
-    self._nbstate = nbstate
+    self._nb_E_states = nb_E_states
+    self._nb_I_states = nb_I_states
     self._T = T
 
     self._motif = gum.BayesNet()
@@ -117,16 +120,16 @@ class DiffusionSIR:
       "d0", "d0", 0, len(self._people)), 1)
 
     for individu in self._people:
-      S_0 = DiffusionSIR._getS(individu, "0")  # values S,1...nbstate,R
-      S_t = DiffusionSIR._getS(individu, "t")  # values S,1...nbstate,R
-      QS_0 = DiffusionSIR._getQS(individu, "0")  # 0=S/1=I/2=R
-      QS_t = DiffusionSIR._getQS(individu, "t")  # 0=S/1=I/2=R
+      S_0 = DiffusionSIR._getS(individu, "0")  # values S,E1...E[nb_E_states],I1...I[nb_I_states],R
+      S_t = DiffusionSIR._getS(individu, "t")  # values S,E1...E[nb_E_states],I1...I[nb_I_states],R
+      QS_0 = DiffusionSIR._getQS(individu, "0")  # 0=S/1=E/2=I/3=R
+      QS_t = DiffusionSIR._getQS(individu, "t")  # 0=S/1=E/2=I/3=R
       O_t = DiffusionSIR._getO(individu, "t")
 
-      self._motif.add(S_0, 2 + nbstate)
-      self._motif.add(S_t, 2 + nbstate)
-      self._motif.add(QS_0, 3)
-      self._motif.add(QS_t, 3)
+      self._motif.add(S_0, 2 + nb_E_states + nb_I_states)
+      self._motif.add(S_t, 2 + nb_E_states + nb_I_states)
+      self._motif.add(QS_0, 4)
+      self._motif.add(QS_t, 4)
 
       self._motif.addArc(S_0, S_t)
 
@@ -138,15 +141,17 @@ class DiffusionSIR:
 
       self._motif.addArc("d0", S_t)
 
-      self._motif.cpt(S_0).fillWith([1] + [0] * (1 + nbstate))
+      self._motif.cpt(S_0).fillWith([1] + [0] * (1 + nb_E_states+nb_I_states)) #Initialisation
       self._motif.cpt(QS_0).fillWith(
-        [1, 0, 0] +
-        [0, 1, 0] * nbstate +
-        [0, 0, 1])
+        [1, 0, 0, 0] +
+        [0, 1, 0, 0] * nb_E_states +
+        [0, 0, 1, 0] * nb_I_states +
+        [0, 0, 0, 1])
       self._motif.cpt(QS_t).fillWith(
-        [1, 0, 0] +
-        [0, 1, 0] * nbstate +
-        [0, 0, 1])
+        [1, 0, 0, 0] +
+        [0, 1, 0, 0] * nb_E_states +
+        [0, 0, 1, 0] * nb_I_states +
+        [0, 0, 0, 1])
 
       self._motif.add(O_t, 2)  # 0: no first symptom / 1:first symptom
       self._motif.addArc(QS_t, O_t)
@@ -155,28 +160,37 @@ class DiffusionSIR:
     self._model = gdyn.unroll2TBN(self._motif, T)
 
   def updateParameters(self, eta0: float, eta: float, sigma: float,
-                       dgamma: list = [0.01150603, 0.03916544, 0.07079709, 0.09876255, 0.11953800, 0.13225631,
+                       dgammaE: list = [0.01150603, 0.03916544, 0.07079709, 0.09876255, 0.11953800, 0.13225631,
+                                       0.13753429, 0.13667998, 0.13120553, 0.12255478],
+                       dgammaI: list = [0.01150603, 0.03916544, 0.07079709, 0.09876255, 0.11953800, 0.13225631,
                                        0.13753429, 0.13667998, 0.13120553, 0.12255478]):
     """ Updates CPTs using the parameters and the model from proposed in Alcov-2 project
 
     Args:
-        eta0 (float): parameter (see Alvoc2)
-        eta ([float]): parameter (see Alvoc2)
-        sigma (float): parameter (see Alvoc2)
-        dgamma (list, optional): parameter (see Alvoc2)
+        eta0 (float): background contamination rate
+        eta ([float]): contamination rate by an infected household member
+        sigma (float): probability to be symptomatic
+        dgammaE (list, optional): distribution of the incubation period (state Exposed)
+        dgammaI (list, optional): distribution of the symptomatic period (state Infected)
     """
     assert len(
-      dgamma) == self._nbstate, f"Not the correct amount of data in dgamma (length {len(dgamma)}!={self._nbstate})"
+      dgammaE) == self._nb_E_states, f"Not the correct amount of data in dgammaE (length {len(dgammaE)}!={self._nb_E_states})"
+    assert len(
+      dgammaI) == self._nb_I_states, f"Not the correct amount of data in dgammaI (length {len(dgammaI)}!={self._nb_I_states})"
 
-    # building CPT(St|St-1,dt_1)
+    # building CPT(St|St-1,dt_1) 
     cptS = []
     stillS = (1 - eta0)
     for d in range(len(self._people) + 1):
-      cptS += [stillS] + [(1 - stillS) * dg for dg in dgamma] + [0]
-      cptS += [0] * (self._nbstate + 1) + [1]
-      for s in range(2, self._nbstate + 1):
-        cptS += [0] * (s - 1) + [1] + [0] * (self._nbstate + 2 - s)
-      cptS += [0] * (self._nbstate + 1) + [1]
+      cptS += [stillS] + [(1 - stillS) * dg for dg in dgammaE] + [0] * (self._nb_I_states + 1) #from S to I
+      cptS += [0] * (self._nb_E_states + 1) + [dg for dg in dgammaI] + [0] #from I1 to E
+      for s in range(2, self._nb_E_states + 1):
+        cptS += [0] * (s - 1) + [1] + [0] * (self._nb_E_states + self._nb_I_states + 2 - s) #from Is to I(s-1)
+      cptS += [0] * (self._nb_E_states + self._nb_I_states + 1) + [1]  #from E1 to R
+      for s in range(2, self._nb_I_states + 1):
+        cptS += [0] * (s - 1 + self._nb_E_states) + [1] + [0] * (self._nb_I_states + 2 - s) #from Es to E(s-1)
+  
+      cptS += [0] * (self._nb_E_states + self._nb_I_states + 1) + [1] #From R to R
       stillS *= (1 - eta)
 
     for t in range(1, self._T):
@@ -184,7 +198,7 @@ class DiffusionSIR:
         self.model_cpt("S", individu, t).fillWith(cptS)
 
     # builiding CPT(Ot|QSt,QSt-1)
-    cptO = [1, 0] + [1 - sigma, sigma] + [1, 0] * 7
+    cptO = [1, 0] * 6 + [1 - sigma, sigma] + [1, 0] * 9 # CAREFUL ! This comes from the fact that there are 4*4 qualitative states (S,E,I,R) so cptO must be of size 16, and only the transition from E to I is nontrivial
     for t in range(1, self._T):
       for individu in self._people:
         self.model_cpt("O", individu, t).fillWith(cptO)
@@ -247,6 +261,7 @@ class DiffusionSIR:
 
     return stories
 
+
   def LL(self, stories: list, approx: bool, verbose: bool = False) -> float:
     """From a filename of evidence (see profile.csv), compute the log-likelihood.
 
@@ -270,7 +285,7 @@ class DiffusionSIR:
     dico = self._createEvidenceFromStory([])
     ie.setEvidence(dico)
     ie.makeInference()
-    pevnull = ie.evidenceProbability()
+    pevnull = min(max(ie.evidenceProbability(),1e-15),1-(1e-15))
     lpevnull = math.log(pevnull)
     for story, weight in stories:
       if len(story) > 0:
@@ -279,7 +294,7 @@ class DiffusionSIR:
           dico[nameO] = 1
           ie.chgEvidence(nameO, 1)
         ie.makeInference()
-        x = weight * math.log(ie.evidenceProbability())
+        x = weight * math.log(max(ie.evidenceProbability(),1e-15))
         if verbose:
           print(f"{nbr} : {weight}x{x}")
         LL += x
@@ -318,7 +333,8 @@ class DiffusionSIR:
   def __str__(self):
     return f"""SIR diffusion
   * number of people: {len(self._people)}
-  * number of Idays: {self._nbstate}
+  * number of Edays: {self._nb_E_states}
+  * number of Idays: {self._nb_I_states}
   * Horizon: {self._T}
   * Model : {self._model}"""
 
