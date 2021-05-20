@@ -15,9 +15,9 @@ dgamE_shape = param[[4]]
 dgamE_rate = param[[5]]
 dgamI_shape = param[[6]]
 dgamI_rate = param[[7]]
-tauE = dgamma(nb_E_states:1,shape = dgamE_shape,rate = dgamE_rate)
+tauE = dgamma(1:nb_E_states,shape = dgamE_shape,rate = dgamE_rate)
 tauE = tauE/sum(tauE)
-tauI = dgamma(nb_I_states:1,shape = dgamI_shape,rate = dgamI_rate)
+tauI = dgamma(1:nb_I_states,shape = dgamI_shape,rate = dgamI_rate)
 tauI = tauI/sum(tauI)
 
 
