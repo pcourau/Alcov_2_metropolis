@@ -115,9 +115,9 @@ class DiffusionSIR:
     self._motif = gum.BayesNet()
 
     self._motif.addCOUNT(gum.RangeVariable(
-      "dt", "dt", 0, len(self._people)), 1)
+      "dt", "dt", 0, len(self._people)), 2) #Count the people in "I" class
     self._motif.addCOUNT(gum.RangeVariable(
-      "d0", "d0", 0, len(self._people)), 1)
+      "d0", "d0", 0, len(self._people)), 2)
 
     for individu in self._people:
       S_0 = DiffusionSIR._getS(individu, "0")  # values S,E1...E[nb_E_states],I1...I[nb_I_states],R
